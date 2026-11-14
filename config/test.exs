@@ -1,0 +1,28 @@
+import Config
+
+# The integration tests visit local HTTP fixtures through real Lens/Lightpanda.
+config :demo_spectre, DemoSpectreWeb.Endpoint,
+  http: [ip: {127, 0, 0, 1}, port: 4002],
+  secret_key_base: "XbIbS0R/HViqni+uCV/cwBf5/eQUb8kbCB9C+Md+ss8NX5dCrf4jReRX0eRStHCO",
+  server: true
+
+# Print only warnings and errors during test
+config :logger, level: :warning
+
+# Initialize plugs at runtime for faster test compilation
+config :phoenix, :plug_init_mode, :runtime
+
+# Enable helpful, but potentially expensive runtime checks
+config :phoenix_live_view,
+  enable_expensive_runtime_checks: true
+
+# Sort query params output of verified routes for robust url comparisons
+config :phoenix,
+  sort_verified_routes_query_params: true
+
+config :demo_spectre,
+  data_root:
+    Path.join(System.tmp_dir!(), "spectre-demo-test-#{System.unique_integer([:positive])}"),
+  model_mode: :deterministic
+
+config :demo_spectre, pending_timeout_ms: 100

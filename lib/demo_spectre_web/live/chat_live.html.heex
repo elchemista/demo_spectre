@@ -1,0 +1,396 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="playground">
+    <header class="topbar">
+      <a href="/" class="brand"><span class="brand-mark">S</span><span>Spectre<span class="brand-sub">PLAYGROUND</span></span></a>
+      <div class="top-meta">
+        <span class="version">0.4</span><span class="mode"><span class="status-dot"></span>{if @mode ==
+                                                                                                 :openrouter,
+                                                                                               do:
+                                                                                                 "OpenRouter",
+                                                                                               else:
+                                                                                                 "Deterministico"}</span>
+      </div>
+    </header>
+    <div :if={@error} id="session-error" role="alert" class="error-banner">{@error}</div>
+    <div class="workspace">
+      <aside class="sidebar">
+        <p class="eyebrow">UN AGENTE, DUE SKILL</p>
+        <h1>Dal sito<br /> all’azione.</h1>
+        <p class="intro">Osserva, prepara, conferma. Segui ogni passaggio del tuo agente.</p>
+        <div class="scenario">
+          <span class="step-number">01</span><strong>Esplora un sito</strong>
+          <p>Lens apre una pagina reale. Il modello prepara il messaggio.</p>
+          <.button
+            id="visit-site"
+            class="primary-button"
+            phx-click="quick"
+            phx-value-command="visit"
+            disabled={is_nil(@session)}
+          ><.icon name="hero-arrow-up-right" class="size-4" /> Apri sito di esempio</.button>
+          <.button
+            id="visit-empty"
+            class="text-button"
+            phx-click="quick"
+            phx-value-command="empty"
+            disabled={is_nil(@session)}
+          >Prova una pagina senza email</.button>
+        </div>
+        <div class="scenario">
+          <span class="step-number">02</span><strong>Prova le altre Skill</strong>
+          <p>Continua a lavorare anche con una conferma aperta.</p>
+          <div class="quick-grid">
+            <.button
+              id="recall-memory"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="memory"
+            >Memoria</.button>
+            <.button
+              id="save-note"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="note"
+            >Salva nota</.button>
+            <.button
+              id="run-diagnostics"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="diagnostics"
+            >Diagnostica</.button>
+            <.button
+              id="send-notice"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="notice"
+            >Notifica Beam</.button>
+          </div>
+        </div>
+        <details class="scenario memory-controls" open>
+          <summary><strong>Esplora la memoria</strong></summary>
+          <p>
+            Cerca restituisce ricordi e fonti; richiama prepara il contesto; rifletti aggiunge osservazioni e modelli mentali.
+          </p>
+          <.form for={@memory_form} id="memory-form" phx-submit="memory_query">
+            <.input
+              field={@memory_form[:query]}
+              id="memory-query"
+              label="Cosa cerchi?"
+              placeholder="es. Elixir"
+              required
+            />
+            <.input
+              field={@memory_form[:operation]}
+              id="memory-operation"
+              type="select"
+              label="Operazione"
+              options={[
+                {"Cerca ricordi", "search"},
+                {"Richiama contesto", "recall"},
+                {"Rifletti con fonti", "reflect"}
+              ]}
+            />
+            <.button id="query-memory" type="submit" class="secondary-button">Cerca in memoria</.button>
+          </.form>
+          <div class="quick-grid">
+            <.button
+              id="memory-atlas"
+              class="text-button"
+              phx-click="quick"
+              phx-value-command="atlas"
+            >Mappa</.button>
+            <.button
+              id="memory-knowledge"
+              class="text-button"
+              phx-click="quick"
+              phx-value-command="knowledge"
+            >Conoscenze</.button>
+          </div>
+        </details>
+        <div class="scenario">
+          <strong>Verifica il ciclo</strong>
+          <p>
+            Hello viene generato dal modello e interpretato da Kinetic. Il log viene scritto dopo Confermo.
+          </p>
+          <div class="quick-grid">
+            <.button
+              id="log-hello"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="hello"
+            >Hello + consenso</.button>
+            <.button
+              id="test-semantic-cache"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="cache"
+            >Prova parafrasi</.button>
+          </div>
+          <p>Cache: indice vettoriale reale, encoder deterministico di prova.</p>
+        </div>
+        <div class="scenario last-scenario">
+          <span class="step-number">03</span><strong>Cambia argomento</strong>
+          <p>Sospendi la richiesta di Ricerca. GAM ne registra la chiusura dopo 30 secondi.</p>
+          <div class="quick-grid">
+            <.button
+              id="suspend-research"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="suspend"
+            >Sospendi</.button><.button
+              id="resume-research"
+              class="secondary-button"
+              phx-click="quick"
+              phx-value-command="resume"
+            >Riprendi</.button>
+          </div>
+        </div>
+        <div class="local-note">
+          <.icon name="hero-computer-desktop" class="size-4" /><span>Browser e GAM reali.<br />Email nella casella locale.</span>
+        </div>
+      </aside>
+      <main class="chat-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">CONVERSAZIONE</span><h2>Il tuo workspace</h2>
+          </div><.button
+            id="agent-status"
+            class="icon-button"
+            phx-click="quick"
+            phx-value-command="status"
+            title="Stato agente"
+          ><.icon name="hero-signal" class="size-5" /></.button>
+        </div>
+        <div class="actors">
+          <.button
+            :for={target <- ["agent", "outreach", "knowledge"]}
+            id={"target-#{target}"}
+            class={["actor", @target == target && "selected"]}
+            phx-click="target"
+            phx-value-target={target}
+          >
+            <span class="actor-dot"></span>{label(target)}
+            <span :if={target != "agent"} class="actor-state">{if busy?(@skills, target),
+              do: "al lavoro",
+              else: "skill"}</span>
+          </.button>
+        </div>
+        <div id="messages" class="messages" phx-update="stream" phx-hook="ChatScroll">
+          <article
+            :for={{id, msg} <- @streams.messages}
+            id={id}
+            data-preview-status={Map.get(msg, :preview_status)}
+            class={["message", "from-#{msg.source}", msg.kind == :presentation && "presentation"]}
+          >
+            <div class="message-label">
+              {label(msg.source)}<span :if={msg.kind == :preview} class="preview-label">{preview_label(
+                msg.preview_status
+              )}</span>
+            </div>
+            <div
+              :if={msg.kind == :presentation}
+              id={"ack-#{id}"}
+              phx-hook="Presentation"
+              data-ref={msg.ref}
+              class="message-body"
+              phx-no-format
+            >{msg.body}</div>
+            <div :if={msg.kind != :presentation} class="message-body">{msg.body}</div>
+          </article>
+        </div>
+        <div id="pending-requests" class="pending-requests" aria-live="polite">
+          <div
+            :for={pending <- @pending}
+            id={"pending-#{pending.id}"}
+            class="pending-card"
+            data-skill={pending.skill}
+            data-status={pending.status}
+            data-presentation-ref={pending.presentation.ref}
+          >
+            <div>
+              <strong>{label(pending.skill)} · {if pending.status == :foreground,
+                do: "Conferma richiesta",
+                else: "Richiesta sospesa"}</strong><small>{inspect(pending.operation)} · revisione {pending.revision}</small>
+            </div>
+            <pre class="consent-material">{pending.presentation.rendered_payload}</pre>
+            <div :if={pending.status == :foreground} class="consent-actions">
+              <.button
+                id={"reject-#{pending.id}"}
+                class="secondary-button"
+                phx-click="confirm"
+                phx-value-skill={pending.skill}
+                phx-value-id={pending.id}
+                phx-value-revision={pending.revision}
+                phx-value-presentation={pending.presentation.ref}
+                phx-value-answer="annulla"
+              >Annulla</.button>
+              <.button
+                id={"confirm-#{pending.id}"}
+                class="primary-button"
+                phx-click="confirm"
+                phx-value-skill={pending.skill}
+                phx-value-id={pending.id}
+                phx-value-revision={pending.revision}
+                phx-value-presentation={pending.presentation.ref}
+                phx-value-answer="confermo"
+              >Confermo</.button>
+            </div>
+          </div>
+        </div>
+        <.form for={@form} id="chat-form" phx-submit="send" phx-change="draft" class="composer">
+          <.input
+            field={@form[:text]}
+            type="text"
+            placeholder={"Scrivi a #{label(@target)}…"}
+            class="chat-input"
+            autocomplete="off"
+            maxlength="4000"
+            required
+          />
+          <.button
+            id="send-message"
+            class="send-button"
+            type="submit"
+            disabled={is_nil(@session)}
+            aria-label="Invia messaggio"
+          ><.icon name="hero-arrow-up" class="size-5" /></.button>
+        </.form>
+        <p class="composer-hint">
+          Le anteprime non eseguono azioni. Le conferme appartengono alla singola richiesta.
+        </p>
+      </main>
+      <aside class="inspector">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">DENTRO LA SESSIONE</span><h2>Un solo GAM Domain</h2>
+          </div><span class="status-dot"></span>
+        </div>
+        <div class="domain-summary">
+          <div><strong id="act-count">{@act_count}</strong><span>Act</span></div><div>
+            <strong id="outcome-count">{@outcome_count}</strong><span>Outcome</span>
+          </div><div><strong>{@revision}</strong><span>Revisione</span></div>
+        </div>
+        <details class="domain-detail">
+          <summary>Identità e processi</summary><code>{@domain}</code><p :for={
+            {skill, state} <- @skills
+          }>
+            {label(skill)} <code>{state[:pid]}</code>
+          </p><.button id="native-message" class="text-button" phx-click="refresh_skill">Invia un messaggio OTP a Memoria</.button>
+        </details>
+        <div class="tools">
+          <span class="eyebrow">STACK · 9 PACKAGE</span><div class="tool-grid">
+            <span
+              :for={tool <- @tools}
+              id={"tool-#{tool}"}
+              class={["tool-pill", MapSet.member?(@tool_hits, tool) && "used"]}
+            ><span class="tool-dot"></span>{String.capitalize(tool)}</span>
+          </div><p>Si illuminano quando un risultato attraversa il Server.</p>
+        </div>
+        <p :if={@last_route} id="routing-evidence" class="routing-evidence">
+          Router:
+          <strong>{case @last_route.strategy do
+            :semantic_cache_search -> "similarità vettoriale"
+            :semantic_cache_exact -> "esempio esatto"
+            other -> to_string(other)
+          end}</strong>
+          · {@last_route.label}
+        </p>
+        <nav class="inspector-tabs" aria-label="Pannelli sessione">
+          <.button
+            :for={
+              {tab, title} <- [
+                {"activity", "Attività"},
+                {"gam", "Registro GAM"},
+                {"mailbox", "Casella"},
+                {"memory", "Memoria"},
+                {"logs", "Log"}
+              ]
+            }
+            id={"tab-#{tab}"}
+            class={["inspector-tab", @tab == tab && "active"]}
+            phx-click="tab"
+            phx-value-tab={tab}
+          >{title}</.button>
+        </nav>
+        <div
+          id="activity"
+          class={["inspector-content", @tab != "activity" && "hidden"]}
+          phx-update="stream"
+        >
+          <p id="activity-empty" class="empty-state">I passaggi del workflow appariranno qui.</p><details
+            :for={{id, item} <- @streams.activity}
+            id={id}
+            class="event"
+          >
+            <summary><span class="event-kind">{item.kind}</span><time>{item.time}</time></summary><pre>{item.text}</pre>
+          </details>
+        </div>
+        <div
+          id="gam-records"
+          class={["inspector-content", @tab != "gam" && "hidden"]}
+          phx-update="stream"
+        >
+          <p id="gam-empty" class="empty-state">Nessuna azione governata ancora.</p><details
+            :for={{id, item} <- @streams.records}
+            id={id}
+            class="event"
+          >
+            <summary>
+              <span class="event-kind">{item.kind}</span><span class="record-ref">{String.slice(
+                item.id,
+                -10,
+                10
+              )}</span>
+            </summary><pre>{item.text}</pre>
+          </details>
+        </div>
+        <div
+          id="mailbox"
+          class={["inspector-content", @tab != "mailbox" && "hidden"]}
+          phx-update="stream"
+        >
+          <p id="mail-empty" class="empty-state">
+            Nessun messaggio locale. Un’email compare solo dopo la conferma e l’esecuzione.
+          </p><article :for={{id, item} <- @streams.mailbox} id={id} class="mail-item">
+            <span class="eyebrow">ACCETTATO LOCALMENTE · {item.time}</span><pre>{item.text}</pre>
+          </article>
+        </div>
+        <div
+          id="memory-results"
+          class={["inspector-content", @tab != "memory" && "hidden"]}
+          phx-update="stream"
+        >
+          <p id="memory-empty" class="empty-state">
+            Cerca una nota salvata. I risultati sono limitati alla tua sessione.
+          </p>
+          <article :for={{id, memory} <- @streams.memory_results} id={id} class="mail-item">
+            <p>{memory.text}</p>
+            <small>Fonte: {memory.source}</small>
+            <details>
+              <summary>Identificatore</summary><code>{memory.id}</code>
+            </details>
+            <.button
+              id={"forget-#{memory.id}"}
+              class="text-button"
+              phx-click="forget_memory"
+              phx-value-id={memory.id}
+            >Dimentica…</.button>
+          </article>
+        </div>
+        <div
+          id="log-receipts"
+          class={["inspector-content", @tab != "logs" && "hidden"]}
+          phx-update="stream"
+        >
+          <p id="logs-empty" class="empty-state">
+            Nessun log Kinetic eseguito. Attende il consenso.
+          </p>
+          <article :for={{id, item} <- @streams.logs} id={id} class="mail-item">
+            <strong>hello</strong><p>Logger · {item.time}</p><details>
+              <summary>Ricevuta GAM</summary><pre>{item.text}</pre>
+            </details>
+          </article>
+        </div>
+      </aside>
+    </div>
+  </div>
+</Layouts.app>
