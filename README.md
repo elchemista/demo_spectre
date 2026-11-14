@@ -31,6 +31,7 @@ pins their transitive dependencies. No sibling checkout or API key is required.
 Use Elixir 1.19 or newer, OTP 28 or newer, Node 22, Rust 1.91 or newer,
 and a C build toolchain with OpenSSL development headers and pkg-config.
 Kinetic's Ortex dependency compiles a Rust NIF even in deterministic mode.
+The first build also downloads native dependencies, including ONNX Runtime.
 Vettore normally uses its published native library; `VETTORE_BUILD=1` also
 builds Vettore locally, as CI does. No database is needed.
 
@@ -303,3 +304,6 @@ Pulse transports, semantic model training and reconnecting existing sessions
 need application configuration and separate validation. They do not need a
 different GAM mode or an application Host. The regex router is intentional for
 repeatability; core 0.4 retains the other recognition strategies.
+
+The [Opus 5.5 review resolution](docs/reviews/RESOLUTION.md) records the independent
+review, corrected failure cases and remaining diagnostic coverage limits.
