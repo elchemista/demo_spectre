@@ -1,4 +1,53 @@
-# Verification and adversarial checks — 2026-11-14
+# Verification and adversarial checks — 2026-11-15
+
+
+## Final coordinated release verification — 15 November 2026
+
+Core, all nine packages, documentation and the demo are published on their
+working branches; no merge or Hex release was performed. Core remains on
+`feature/agent-server-gam`, Lab uses `feature/diagnostics-0.4`, and the other
+packages use `feature/stack-tools-0.4`. The demo's
+[manifest](../spectre.lock.exs) and `mix.lock` pin exact public source commits.
+
+Two real Claude Opus 5.5 reviews were completed. The initial blocker and medium
+findings were corrected; the follow-up found no remaining concrete blocker.
+Read the [findings, fixes and nonblocking limitations](reviews/RESOLUTION.md).
+The reviewer inspected source; the executed tests below are separate evidence.
+
+| Verification | Result and revision boundary |
+| --- | --- |
+| Core complete suite | **4,527 passed**, one excluded, at `50e7c06`; includes doctest and property checks. |
+| Final core transport correction | **38 focused tests passed** at `ebce80f`, including containment of a suspended Managed owner's timeout. The complete suite above preceded this final correction. |
+| Core static checks | Compilation and ExDoc with warnings as errors, formatting, and Dialyzer passed at `50e7c06`; Dialyzer reported zero errors. |
+| Nine companion packages | **2,898 passed**: Beam 199, Directive 160, Kinetic 1,339, Lens 184, Mnemonic 538, Prism 81, Pulse 189, Ledger 113, Lab 95. Lens excluded 20 tests and Mnemonic 11. |
+| Nine-tool core integration | **4 passed** before the final diagnostic transport fixes. |
+| Demo complete browser suite | **20/20** Chromium scenarios passed before the Opus corrections; **4/4** relevant browser scenarios and **41/41** precommit tests passed after the demo corrections. |
+| Final public-source reproduction | Demo `bfdbece`, core `ebce80f`: compile with warnings as errors, asset build, **41/41** ExUnit tests, and **1/1** Chromium all-nine-package workflow passed. |
+
+The independent checkout was created from public GitHub sources under
+`/tmp/demo-spectre-public-zry9m5k7`, without sibling dependency overrides, Git
+URL rewriting or LLM credentials. Its initial build compiled the native Ortex
+and Vettore dependencies successfully. It was then refreshed to the final demo
+commit and its exact dependency pins; native build caches were reused.
+`mix deps.get --check-locked` and the pin checker passed, and neither lockfile
+changed. The final source compilation took 31.8 seconds, ExUnit 33.9 seconds,
+and the Chromium workflow 6.6 seconds.
+
+The final browser smoke used a temporary test endpoint on port 4002, an isolated
+data directory, Lightpanda 1.0.4 and a 30-second consent timeout. The endpoint was
+stopped afterward. No demo webserver is left running. Earlier references below
+to running endpoints describe historical checks only.
+
+Local execution evidence: `/tmp/spectre-clean-delivery-results.json`,
+`/tmp/spectre-clean-delivery-{compile,tests,browser,server}.log`,
+`/tmp/spectre-release-opus-final-tests.log`,
+`/tmp/spectre-release-last-targeted.log`, and
+`/tmp/spectre-release-opus-final-dialyzer.log`. These temporary logs are local
+artifacts; the source, regression tests, CI workflow, review records and pinned
+reproduction instructions are committed in the repositories.
+
+The checks use deterministic models, local fixture pages and a local mailbox.
+They do not claim external LLM, public-site browsing or SMTP validation.
 
 ## Opus review follow-up
 
