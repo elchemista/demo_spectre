@@ -43,7 +43,7 @@
   :rustler => {:hex, :rustler, "0.38.0", "7a8906998ff0d28e3021c0a73264abcda719bda344b2e58307c6805b0f87c9b4", [:mix], [{:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: false]}], "hexpm", "704c03c1bf66be12b031c5a389347b91c81c5cb819a24b068b0de36fe4a5652a"},
   :rustler_precompiled => {:hex, :rustler_precompiled, "0.9.0", "3a052eda09f3d2436364645cc1f13279cf95db310eb0c17b0d8f25484b233aa0", [:mix], [{:rustler, "~> 0.23", [hex: :rustler, repo: "hexpm", optional: true]}], "hexpm", "471d97315bd3bf7b64623418b3693eedd8e47de3d1cb79a0ac8f9da7d770d94c"},
   :server_sent_events => {:hex, :server_sent_events, "1.1.0", "54606238b9182ba673a10ce90bd95f81a0939c1baa91cdf86b66acc04edd1832", [:mix], [], "hexpm", "8e164db8e295a2d869a8faafbf4a1eeaa749b62fe93f66271adff6394d93ce15"},
-  :spectre => {:git, "https://github.com/elchemista/spectre.git", "5ae8bc5f0130a18c9cd632968f5edff9dbda772f", [ref: "5ae8bc5f0130a18c9cd632968f5edff9dbda772f"]},
+  :spectre => {:git, "https://github.com/elchemista/spectre.git", "fd361b1be3e706c8d84f8b0b6169f2eb7107b338", [ref: "fd361b1be3e706c8d84f8b0b6169f2eb7107b338"]},
   :spectre_beam => {:git, "https://github.com/elchemista/spectre_beam.git", "4ac510e4d452254671e6d6e783ac91189d21fb8e", [ref: "4ac510e4d452254671e6d6e783ac91189d21fb8e"]},
   :spectre_directive => {:git, "https://github.com/elchemista/spectre_directive.git", "ee9f88251424ae29f33cd782e83fe2a88c217b27", [ref: "ee9f88251424ae29f33cd782e83fe2a88c217b27"]},
   :spectre_kinetic => {:git, "https://github.com/elchemista/spectre_kinetic.git", "d4772e1699b402fb604a76fee6a5e1983b64a9ac", [ref: "d4772e1699b402fb604a76fee6a5e1983b64a9ac"]},

@@ -28,9 +28,11 @@ Clone this repository on its own. Core and all nine packages are fetched from
 **exact Git commits** in [spectre.lock.exs](spectre.lock.exs); [mix.lock](mix.lock)
 pins their transitive dependencies. No sibling checkout or API key is required.
 
-Use Elixir 1.19 or newer, OTP 28 or newer, Node 22, and a C build toolchain.
-Vettore uses its published native library; set `VETTORE_BUILD=1` and install Rust
-1.91 or newer to build it locally, as CI does. No database is needed.
+Use Elixir 1.19 or newer, OTP 28 or newer, Node 22, Rust 1.91 or newer,
+and a C build toolchain with OpenSSL development headers and pkg-config.
+Kinetic's Ortex dependency compiles a Rust NIF even in deterministic mode.
+Vettore normally uses its published native library; `VETTORE_BUILD=1` also
+builds Vettore locally, as CI does. No database is needed.
 
 ```sh
 git clone https://github.com/elchemista/demo_spectre.git
