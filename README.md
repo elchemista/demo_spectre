@@ -5,6 +5,11 @@ shared GAM Domain**. No database, no authentication scaffolding and no API key
 required for the default mode. This application lives beside the Spectre
 repositories; it is not part of the core package.
 
+![Spectre Playground chat showing Skill conversations, consent requests, installed tools and the shared GAM Domain](docs/screenshots/showcase.png)
+
+Two independent Skills, separate email and memory consent, nine installed
+packages, and one shared GAM Domain.
+
 **The demo is already on the automatic GAM architecture.** `AgentServer`,
 Research's `OutreachServer` and `KnowledgeServer` are separate processes sharing
 the root's existing GAM connection, one Domain and one authority ledger. Each
