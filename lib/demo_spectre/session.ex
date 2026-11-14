@@ -19,9 +19,12 @@ defmodule DemoSpectre.Session do
   @doc "Returns public references for the UI, without an authority handle."
   @spec info(pid()) :: map()
   def info(session), do: GenServer.call(session, :info)
-  @doc "Returns runtime state and the authoritative GAM projection."
-  @spec snapshot(pid()) :: map()
+  @doc "Returns UI pending controls and bounded, redacted diagnostic projections."
+  @spec snapshot(pid()) :: map() | {:error, term()}
   def snapshot(session), do: GenServer.call(session, :snapshot)
+  @doc "Reads another bounded page of the shared GAM diagnostic projection."
+  @spec gam_page(pid(), term()) :: {:ok, map()} | {:error, term()}
+  def gam_page(session, cursor), do: GenServer.call(session, {:gam_page, cursor})
   @doc "Submits actual user input through this session's authenticated UI owner."
   @spec input(pid(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
   def input(session, text, opts \\ []),
@@ -82,6 +85,8 @@ defmodule DemoSpectre.Session do
         max_steps: 80
       )
 
+    :ok = Server.subscribe(agent)
+
     {:ok,
      %{
        id: id,
@@ -98,26 +103,41 @@ defmodule DemoSpectre.Session do
   def handle_call(:info, _, state),
     do: {:reply, Map.take(state, [:id, :agent, :domain]), state}
 
-  def handle_call(:snapshot, _, state) do
+  def handle_call(:snapshot, {owner, _}, %{owner: owner} = state) do
     skills =
       Map.new([:outreach, :knowledge], fn skill ->
         value =
           case Server.skill_server(state.agent, skill) do
-            {:ok, pid} -> Map.put(Server.status(pid), :pid, inspect(pid))
-            {:error, reason} -> %{pending: [], error: reason}
+            {:ok, pid} ->
+              diagnostics =
+                case Spectre.Lab.inspect(state.agent, :operational, skill: skill, limit: 25) do
+                  {:ok, projection} -> projection
+                  {:error, reason} -> %{error: reason}
+                end
+
+              pid
+              |> Server.status()
+              |> Map.take([:pending, :busy])
+              |> Map.merge(%{pid: inspect(pid), diagnostics: diagnostics})
+
+            {:error, reason} ->
+              %{pending: [], error: reason}
           end
 
         {skill, value}
       end)
 
     result =
-      case Server.gam_view(state.agent) do
-        {:ok, view} -> %{skills: skills, gam: view, root: Server.status(state.agent)}
-        {:error, _} = error -> error
+      with {:ok, view} <- Server.gam_inspect(state.agent, limit: 50),
+           {:ok, operational} <- Spectre.Lab.inspect(state.agent, :operational, limit: 50) do
+        %{skills: skills, gam: view, root: operational}
       end
 
     {:reply, result, state}
   end
+
+  def handle_call({:gam_page, cursor}, {owner, _}, %{owner: owner} = state),
+    do: {:reply, Server.gam_inspect(state.agent, limit: 50, cursor: cursor), state}
 
   def handle_call({:presented, ref}, {owner, _}, %{owner: owner} = state),
     do: {:reply, Server.presented(state.agent, ref), state}
@@ -133,6 +153,19 @@ defmodule DemoSpectre.Session do
   @impl true
   def handle_info({Spectre.Server.GAM.Managed, _, {:presentation, show}}, state) do
     send(state.owner, {:presentation, show})
+    {:noreply, state}
+  end
+
+  def handle_info({Server, agent, {:diagnostics_changed, _}}, %{agent: agent} = state) do
+    send(state.owner, :diagnostics_changed)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {Server, agent, {:skill, _, {:diagnostics_changed, _}}},
+        %{agent: agent} = state
+      ) do
+    send(state.owner, :diagnostics_changed)
     {:noreply, state}
   end
 

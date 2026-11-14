@@ -82,8 +82,13 @@ defmodule DemoSpectre.SessionTest do
            ) == 1
 
     snapshot = Session.snapshot(c.session)
-    assert length(snapshot.gam.outcomes) >= 4
-    assert Enum.any?(snapshot.gam.evidence, &(inspect(&1) =~ "spectre_skill_invocation"))
+    assert snapshot.gam.counts.outcomes >= 4
+
+    assert Enum.any?(
+             all_records(c.session, snapshot.gam),
+             &(inspect(&1) =~ "spectre_skill_invocation")
+           )
+
     assert snapshot.skills.outreach.pid != snapshot.skills.knowledge.pid
 
     for tool <- [:lens, :kinetic, :mnemonic, :prism, :beam, :directive, :pulse, :ledger, :lab] do
@@ -128,7 +133,7 @@ defmodule DemoSpectre.SessionTest do
                     {:skill, :outreach, {:response, _, "La pagina non contiene" <> _, _}}},
                    15_000
 
-    assert Session.snapshot(c.session).gam.acts == []
+    assert Session.snapshot(c.session).gam.counts.acts == 0
   end
 
   test "topic changes close the Skill intention through audited GAM lifecycle", c do
@@ -147,8 +152,12 @@ defmodule DemoSpectre.SessionTest do
              )
 
     snapshot = Session.snapshot(c.session)
-    assert Enum.any?(snapshot.gam.evidence, &(inspect(&1) =~ "topic_changed"))
-    refute Enum.any?(snapshot.gam.acts, &(&1.class == "demo.memory"))
+    assert Enum.any?(all_records(c.session, snapshot.gam), &(inspect(&1) =~ "topic_changed"))
+
+    refute Enum.any?(
+             all_records(c.session, snapshot.gam),
+             &(Map.get(&1, :class) == "demo.memory")
+           )
   end
 
   test "Beam delivery requires consent and native OTP callbacks remain available", c do
@@ -168,6 +177,11 @@ defmodule DemoSpectre.SessionTest do
     {:ok, _} = Server.input(c.agent, "ricorda Questa nota richiede il proprietario della UI.")
     assert_receive {:presentation, show}, 10_000
     ref = show["presentation_ref"]
+
+    task = Task.async(fn -> Session.snapshot(c.session) end)
+    assert {:error, :unauthorized_transport} = Task.await(task)
+    task = Task.async(fn -> Session.gam_page(c.session, nil) end)
+    assert {:error, :unauthorized_transport} = Task.await(task)
 
     task = Task.async(fn -> Session.presented(c.session, ref) end)
     assert {:error, :unauthorized_transport} = Task.await(task)
@@ -194,6 +208,13 @@ defmodule DemoSpectre.SessionTest do
                    5000
 
     assert Enum.count(Events.history(c.id), &(&1.kind == :effect)) == 1
+  end
+
+  defp all_records(_session, %{next_cursor: nil, records: records}), do: records
+
+  defp all_records(session, page) do
+    assert {:ok, next} = Session.gam_page(session, page.next_cursor)
+    page.records ++ all_records(session, next)
   end
 
   defp shown_pending(c, skill) do

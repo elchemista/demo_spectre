@@ -1,0 +1,73 @@
+name: Reproduce pinned Spectre demo
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MIX_ENV: test
+      ERL_FLAGS: '+S 4:4'
+      CARGO_BUILD_JOBS: '2'
+      VETTORE_BUILD: '1'
+      LIGHTPANDA_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28'
+          elixir-version: '1.19'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+      - name: Native build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl-dev
+      - name: Verify immutable source pins
+        run: elixir scripts/check_spectre_pins.exs
+      - name: Fetch and build from public sources
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --check-locked
+          mix deps.compile
+          mix compile --warnings-as-errors
+          git diff --exit-code -- mix.lock spectre.lock.exs
+      - name: Install pinned browser and frontend
+        run: |
+          bash scripts/install_browser.sh
+          mix assets.setup
+          mix assets.build
+          npm ci
+          npx playwright install --with-deps chromium ffmpeg
+      - name: Unit and LiveView tests
+        run: mix test --max-cases 4
+      - name: Browser workflow
+        run: |
+          MIX_ENV=dev mix deps.get --check-locked
+          MIX_ENV=dev mix deps.compile
+          MIX_ENV=dev mix compile --warnings-as-errors
+          MIX_ENV=dev mix phx.server > /tmp/demo-spectre.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent http://localhost:4000/ >/dev/null; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then cat /tmp/demo-spectre.log; exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent http://localhost:4000/ >/dev/null
+          npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: diagnostic-artifacts
+          path: |
+            playwright-report/
+            test-results/
+            /tmp/demo-spectre.log

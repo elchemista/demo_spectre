@@ -25,6 +25,17 @@ async function consentData(card) {
   }));
 }
 
+// A diagnostic page is bounded. Historical assertions explicitly load more
+// retained records instead of depending on an unbounded raw ledger response.
+async function expectGAM(page, text) {
+  await expect.poll(async () => {
+    if ((await page.locator('#gam-records').textContent()).includes(text)) return true;
+    const more = page.locator('#more-gam-records');
+    if (await more.isVisible()) await more.click();
+    return false;
+  }).toBe(true);
+}
+
 // Simulate a stale or tampered browser event, as any client can do. This exercises
 // the real websocket/server boundary without reaching into Agent/GAM internals.
 async function push(page, event, payload) {
@@ -76,12 +87,15 @@ test('all nine packages: real browser, two consents, memory, audit and native Sk
   await expect(messages(page, 'outreach')).toContainText(['già contattato']);
   await expect(effects(page)).toHaveCount(1);
   await expect(page.locator('.tool-pill.used')).toHaveCount(9);
-  await page.locator('.domain-detail summary').click();
+  await page.locator('.domain-detail summary').first().click();
   await page.locator('#native-message').click();
   await expect(messages(page, 'knowledge')).toContainText(['Refresh ricevuto']);
   await page.locator('#tab-gam').click();
-  await expect(page.locator('#gam-records')).toContainText('spectre_skill_invocation');
-  await expect(page.locator('#gam-records')).toContainText('demo.email');
+  await expectGAM(page, 'spectre_skill_invocation');
+  await expectGAM(page, 'demo.email');
+  await expect(page.locator('#gam-records')).not.toContainText('hello@atelier.example');
+  await page.locator('#operational-diagnostics summary').click();
+  await expect(page.locator('#operational-diagnostics')).toContainText('codec_valid: true');
   const composer = await page.locator('#chat-form').boundingBox();
   expect(composer.y + composer.height).toBeLessThanOrEqual(page.viewportSize().height);
   await expect.poll(() => page.locator('#messages').evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
@@ -169,7 +183,7 @@ test('real timer expiry records closure and rejects the saved button', async ({p
   await push(page, 'confirm', old);
   await expect(page.locator('#flash-error')).toContainText('Conferma scaduta');
   await page.locator('#tab-gam').click();
-  await expect(page.locator('#gam-records')).toContainText('topic_changed');
+  await expectGAM(page, 'topic_changed');
   await send(page, 'riprendi memoria', 'knowledge');
   await expect(messages(page, 'knowledge')).toContainText(['Non ci sono richieste sospese']);
 });
@@ -234,7 +248,9 @@ test('disallowed URLs fail safely and the next real page without email still wor
 
 test('Beam consent and rapid requests during streaming leave both Skills responsive', async ({page}) => {
   await page.locator('#visit-site').click();
-  for (let i = 0; i < 8; i++) await page.locator('#agent-status').click();
+  // Send eight actual websocket events. LiveView suppresses repeated clicks on
+  // a loading button, which tests browser timing rather than the Server queue.
+  for (let i = 0; i < 8; i++) await push(page, 'quick', {command: 'status'});
   await page.locator('#send-notice').click();
   await expect(pending(page, 'outreach')).toHaveCount(1);
   await expect(pending(page, 'knowledge')).toHaveCount(1);
@@ -242,9 +258,8 @@ test('Beam consent and rapid requests during streaming leave both Skills respons
   await expect(messages(page, 'knowledge')).toContainText(['Notifica Beam accettata']);
   await expect(effects(page)).toHaveCount(1);
   await reject(page, 'outreach');
-  const accepted = await page.locator('#messages .from-user .message-body').filter({hasText:/^status$/}).count();
-  expect(accepted).toBeGreaterThanOrEqual(5);
-  await expect(messages(page, 'agent').filter({hasText:'Agente disponibile'})).toHaveCount(accepted);
+  await expect(page.locator('#messages .from-user .message-body').filter({hasText:/^status$/})).toHaveCount(8);
+  await expect(messages(page, 'agent').filter({hasText:'Agente disponibile'})).toHaveCount(8);
 });
 
 test('two browser sessions isolate memory, consent and effects; reload invalidates old authority', async ({page, context}) => {
@@ -310,7 +325,7 @@ test('lost presentation acknowledgements never create consent; late acknowledgem
   await page.locator('#agent-status').click();
   await expect(messages(page, 'agent')).toContainText(['Agente disponibile']);
   await page.locator('#tab-gam').click();
-  await expect(page.locator('#gam-records')).toContainText('ambiguous');
+  await expectGAM(page, 'ambiguous');
 });
 
 test('websocket reconnect drops the previous session and cannot reuse its consent', async ({page}) => {
@@ -361,7 +376,7 @@ test('Kinetic hello: button consent is mandatory and a replay cannot log twice',
   await expect(page.locator('#log-receipts article')).toHaveCount(1);
   await expect(effects(page)).toHaveCount(0);
   await page.locator('#tab-gam').click();
-  await expect(page.locator('#gam-records')).toContainText('demo.log');
+  await expectGAM(page, 'demo.log');
 });
 
 test('Kinetic hello cancellation leaves no effect or log receipt', async ({page}) => {

@@ -49,11 +49,20 @@ module, interaction and command responsible for each proposal.
    module relays authenticated UI input and events; it implements no GAM kernel.
 4. [outreach_server.ex](../lib/demo_spectre/skills/outreach_server.ex) uses Lens,
    the completed model result and Kinetic to propose an email. Its business
-   callback checks the recipient against the observed page. GAM handles the
+   callback checks the recipient against the observed page. The plain
+   [Contacts parser](../lib/demo_spectre/contacts.ex) reads only structured
+   `mailto:` destinations and semantic page text, records URL and observation
+   provenance, and refuses to choose among distinct contacts. It does not scan
+   `inspect(page)`, model context or arbitrary metadata. Observed presence is
+   not permission: the contact is bound to a separate confirmation. GAM handles the
    presentation, consent, admission, Act, execution and Outcome.
 5. [knowledge_server.ex](../lib/demo_spectre/skills/knowledge_server.ex) uses the
    same installed tools for memory and diagnostics. Its state, pending requests
-   and native `handle_info` remain independent of Outreach's Server.
+   and native `handle_info` remain independent of Outreach's Server. Plain
+   `Knowledge.Memory` and `Knowledge.Diagnostics` modules separate result
+   presentation without introducing another process or bypassing Server helpers.
+   An unknown successful continuation records a diagnostic and reports the
+   mismatch; it cannot crash the callback or retry an already performed effect.
 6. [chat_live.ex](../lib/demo_spectre_web/live/chat_live.ex) renders each exact
    Presentation and acknowledges rendering separately from approval. Its
    decision is relayed through Session to
@@ -98,6 +107,28 @@ continuations under separate keys, while the authority history and command
 journal keep their coherent shared storage. A new browser session in this demo
 starts a new identity and Domain; automatic reattachment to an old chat is not
 part of this showcase.
+
+## Inspection without polling the authority ledger
+
+The authenticated Session consumer subscribes with `Spectre.Server.subscribe/1`.
+Checkpoint and shared GAM changes trigger notifications, coalesced by LiveView
+before reading a fresh projection. There is no recurring full-ledger poll.
+
+`Spectre.Lab.inspect(agent, :operational, limit: 50)` reads bounded checkpoint
+metadata for the developer panel. `Spectre.Server.gam_inspect/2` supplies safe
+record identifiers, kinds, statuses and correlations with global counts. It
+excludes effect arguments, evidence payloads and private application state.
+`Session.snapshot/1` and page retrieval enforce the same UI owner as consent.
+
+The record panel loads 50 records per page and retains at most 200 displayed
+records. Its cursor is bound to one GAM revision; a changed revision resets to
+the first page. Displayed pages are diagnostic views, not persistence or a second
+Ledger. The consent UI still renders exact Presentations from their dedicated
+events; redacting diagnostics does not hide what the user is asked to approve.
+
+A checkpoint is current retained state, not a complete event log. Lab's trace
+contract reports its coverage explicitly; it cannot infer missing historical
+routing, discarded commands or the model's reasoning.
 
 ## Verification
 

@@ -58,6 +58,41 @@ defmodule DemoSpectreWeb.ChatLiveTest do
     await(fn -> has_element?(view, "#messages .from-agent", "Agente disponibile") end)
   end
 
+  test "GAM diagnostics load bounded pages and reset when the revision changes", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+
+    for index <- 1..8 do
+      view
+      |> form("#chat-form", chat: %{text: "ricorda Segreto diagnostico #{index}."})
+      |> render_submit()
+
+      await(fn -> count(view, "[phx-hook=Presentation]") == index end)
+      html = render(view) |> LazyHTML.from_fragment()
+
+      ref =
+        html
+        |> LazyHTML.query("[phx-hook=Presentation]")
+        |> LazyHTML.attribute("data-ref")
+        |> List.last()
+
+      render_hook(view, "presented", %{"ref" => ref})
+      await(fn -> has_element?(view, "#pending-requests [data-status=foreground]") end)
+      view |> element("#pending-requests button[phx-value-answer=annulla]") |> render_click()
+      await(fn -> not has_element?(view, "#pending-requests [data-status=foreground]") end)
+    end
+
+    view |> element("#tab-gam") |> render_click()
+    await(fn -> has_element?(view, "#more-gam-records") end)
+    assert count(view, "#gam-records details") == 50
+    refute has_element?(view, "#gam-records", "Segreto diagnostico")
+    view |> element("#more-gam-records") |> render_click()
+    await(fn -> count(view, "#gam-records details") > 50 end)
+
+    view |> element("#save-note") |> render_click()
+    await(fn -> count(view, "[phx-hook=Presentation]") == 9 end)
+    await(fn -> count(view, "#gam-records details") == 50 end)
+  end
+
   test "session shutdown leaves a stable disconnected page even if a refresh is queued", %{
     conn: conn
   } do
@@ -104,4 +139,7 @@ defmodule DemoSpectreWeb.ChatLiveTest do
       end
     end
   end
+
+  defp count(view, selector),
+    do: view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.count()
 end

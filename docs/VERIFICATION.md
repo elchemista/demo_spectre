@@ -1,5 +1,46 @@
 # Verification and adversarial checks — 2026-11-14
 
+## 0.4 release preparation: diagnostics and demo hardening
+
+The final source passed **36/36** `mix precommit` checks (37.7 seconds) and
+**20/20** Chromium scenarios (3.2 minutes), using the official **Lightpanda 1.0.4**
+binary also pinned by CI. The browser endpoint was stopped after verification;
+no development webserver is left running.
+
+The new regressions cover structured Lens contacts, ignored metadata and mailto
+query recipients, source provenance, ambiguous contacts stopping before model
+generation, recipient substitution rejection, and unknown successful
+continuations reporting diagnostics without retrying an effect. LiveView tests
+exercise more than 50 GAM records, pagination, revision reset, payload redaction
+and owner-only Session inspection. The browser exercises all nine packages,
+both Skill processes, separate confirmations, timer expiry, reconnection,
+semantic routing, Kinetic hello, and Mnemonic search/reflection/forget/knowledge.
+
+The inspector now reads safe paginated GAM records and Lab operational metadata
+for root and Skill checkpoints. Notifications drive coalesced refreshes; the
+full ledger is no longer polled. The operational panel has bounded internal
+scrolling, verified in the [desktop capture](screenshots/desktop.png), and the
+mobile browser scenario checks horizontal overflow. The diagnostic Skill flow
+also uses Lab's `{:inspect, :checkpoint, :operational}` helper.
+
+One old stress-test assertion depended on how many repeated button clicks
+LiveView delivered while that button was loading. It now submits eight actual
+websocket events and verifies all eight accepted inputs receive eight responses,
+while Beam and Outreach remain responsive. The complete final browser run
+passed with this stronger deterministic assertion. No application warning or
+error was found in the final server log.
+
+Commands used the local sibling override while testing the exact coordinated
+source: `SPECTRE_LOCAL_DEPS=1 LIGHTPANDA_PATH=/tmp/spectre-lightpanda-1.0.4`.
+Public commit pinning and clean-clone reproduction are separately described in
+the README; these results do not claim live LLM, external SMTP or public browsing.
+The fixture-only browser policy remains in place.
+
+Local logs: `/tmp/demo-release-ready-precommit.log`,
+`/tmp/demo-release-ready-browser.log`, `/tmp/demo-release-ready-server.log`.
+The earlier entries below are historical baselines, not the current server state.
+
+
 The showcase is tested in a real headless **Chromium** browser through Playwright,
 with JavaScript, LiveView hooks and WebSockets enabled. Lens uses a separate real
 Lightpanda browser to read the local fixture. No remote email is sent.

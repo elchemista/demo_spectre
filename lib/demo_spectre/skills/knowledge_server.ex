@@ -8,6 +8,7 @@ defmodule DemoSpectre.Skills.KnowledgeServer do
   remains bound to Knowledge's exact presentation.
   """
   use Spectre.Server, tools: DemoSpectre.AI, prompt_root: "priv/prompts"
+  alias DemoSpectre.Knowledge.{Memory, Diagnostics}
 
   @impl true
   def handle_action(%{operation: :forget_memory, args: %{selector: id}}, ctx) do
@@ -125,52 +126,27 @@ defmodule DemoSpectre.Skills.KnowledgeServer do
   defp next(:searched, {:ok, results}, ctx) do
     DemoSpectre.Events.publish(ctx.identity.subject, :memory_results, %{results: results})
 
-    text =
-      Enum.map_join(results, "\n\n", fn result ->
-        "• #{Map.get(result.record, :text, "")}"
-      end)
-
     respond(
-      assign(ctx, :memory_choices, Map.new(results, &{&1.id, Map.get(&1.record, :text, "")})),
-      if(text == "", do: "Nessun ricordo trovato.", else: "Risultati della ricerca:\n" <> text)
+      assign(ctx, :memory_choices, Memory.choices(results)),
+      Memory.search(results)
     )
   end
 
-  defp next(:reflected, {:ok, packet}, ctx),
-    do:
-      respond(
-        ctx,
-        "Contesto con fonti:\n" <>
-          memory_text(%{moments: packet.raw_memories}) <>
-          "\n#{length(packet.observations)} osservazioni · #{length(packet.mental_models)} modelli mentali"
-      )
-
-  defp next(:atlas, {:ok, atlas}, ctx),
-    do:
-      respond(
-        ctx,
-        "Mappa memoria: #{length(atlas.nodes)} nodi, #{length(atlas.edges)} collegamenti."
-      )
-
-  defp next(:knowledge, {:ok, knowledge}, ctx),
-    do:
-      respond(
-        ctx,
-        "Conoscenze riutilizzabili:\n" <>
-          inspect(knowledge.skills, pretty: true, printable_limit: 2000)
-      )
+  defp next(:reflected, {:ok, packet}, ctx), do: respond(ctx, Memory.reflection(packet))
+  defp next(:atlas, {:ok, atlas}, ctx), do: respond(ctx, Memory.atlas(atlas))
+  defp next(:knowledge, {:ok, knowledge}, ctx), do: respond(ctx, Memory.knowledge(knowledge))
 
   defp next(:channels, {:ok, _}, ctx), do: pulse(ctx, {:protocol}, on_result: :protocol)
   defp next(:protocol, {:ok, _}, ctx), do: ledger(ctx, {:head}, on_result: :checkpoint)
 
   defp next(:checkpoint, {:ok, _}, ctx),
-    do: lab(ctx, {:inspect, :checkpoint}, on_result: :inspection)
+    do: lab(ctx, {:inspect, :checkpoint, :operational}, on_result: :inspection)
 
-  defp next(:inspection, {:ok, %{codec_valid: true}}, ctx),
+  defp next(:inspection, {:ok, %{checkpoint: %{codec_valid: true}}}, ctx),
     do:
       respond(
         ctx,
-        "Diagnostica completata: Beam e Pulse disponibili, checkpoint Ledger leggibile e codifica verificata da Lab."
+        "Diagnostica completata: Beam e Pulse disponibili; Lab ha verificato il checkpoint Ledger e letto i metadati operativi della Skill."
       )
 
   defp next(:recalled, {:ok, memory}, ctx),
@@ -178,20 +154,14 @@ defmodule DemoSpectre.Skills.KnowledgeServer do
       respond(
         ctx,
         "Memoria della sessione:\n" <>
-          memory_text(memory)
+          Memory.recall(memory)
       )
 
   defp next(tag, {:governed, %{outcome: %{status: :succeeded}}}, ctx) do
-    text =
-      case tag do
-        :saved -> "Nota salvata dopo conferma."
-        :forgotten -> "Ricordo dimenticato dopo conferma. Le ricerche ordinarie lo escludono."
-        :learned -> "Conoscenza salvata dopo conferma."
-        :hello_logged -> "hello scritto nel log dopo conferma."
-        :notified -> "Notifica Beam accettata nella casella locale."
-      end
-
-    respond(ctx, text)
+    case Memory.success(tag) do
+      {:ok, text} -> respond(ctx, text)
+      :unknown -> respond(ctx, Diagnostics.success(tag, ctx))
+    end
   end
 
   defp next(_, {:consent, status}, ctx),
@@ -199,16 +169,6 @@ defmodule DemoSpectre.Skills.KnowledgeServer do
 
   defp next(tag, result, ctx),
     do: respond(ctx, "Operazione #{tag}: #{inspect(result, limit: 6, printable_limit: 350)}")
-
-  @spec memory_text(map()) :: String.t()
-  defp memory_text(memory) do
-    texts = Enum.map(Map.get(memory, :moments, []), & &1.text) |> Enum.uniq()
-
-    if texts == [],
-      do:
-        "Nessuna informazione richiamata per questa ricerca. Prova memoria seguito da parole della nota, oppure ricorda per salvarne una.",
-      else: Enum.map_join(texts, "\n\n", &("• " <> &1))
-  end
 
   @spec tool(atom()) :: atom()
   defp tool(tag),

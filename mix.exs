@@ -39,45 +39,54 @@ defmodule DemoSpectre.MixProject do
   #
   # Type `mix help deps` for examples and options.
   defp deps do
-    [
-      {:spectre, path: "../spectre", override: true},
-      {:spectre_kinetic, path: "../spectre_kinetic", override: true},
-      {:spectre_mnemonic, path: "../spectre_mnemonic", override: true},
-      {:spectre_lens, path: "../spectre_lens", override: true},
-      {:spectre_prism, path: "../spectre_prism", override: true},
-      {:spectre_beam, path: "../spectre_beam", override: true},
-      {:spectre_directive, path: "../spectre_directive", override: true},
-      {:spectre_pulse, path: "../spectre_pulse", override: true},
-      {:spectre_ledger, path: "../spectre_ledger", override: true},
-      {:spectre_lab, path: "../spectre_lab", override: true},
-      {:req, "~> 0.5"},
-      {:phoenix, "~> 1.8.16"},
-      {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 1.2.0"},
-      {:lazy_html, ">= 0.1.0", only: :test},
-      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
-      {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
-      {:heroicons,
-       github: "tailwindlabs/heroicons",
-       tag: "v2.2.0",
-       sparse: "optimized",
-       app: false,
-       compile: false,
-       depth: 1},
-      {:daisyui,
-       github: "saadeghi/daisyui",
-       tag: "v5.5.20",
-       sparse: "packages/bundle",
-       app: false,
-       compile: false,
-       depth: 1},
-      {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"},
-      {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
-    ]
+    spectre_deps() ++
+      [
+        # Enables reproducible VETTORE_BUILD=1 source builds on clean machines.
+        {:rustler, "~> 0.38.0", runtime: false},
+        {:req, "~> 0.5"},
+        {:phoenix, "~> 1.8.16"},
+        {:phoenix_html, "~> 4.1"},
+        {:phoenix_live_reload, "~> 1.2", only: :dev},
+        {:phoenix_live_view, "~> 1.2.0"},
+        {:lazy_html, ">= 0.1.0", only: :test},
+        {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
+        {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
+        {:heroicons,
+         github: "tailwindlabs/heroicons",
+         tag: "v2.2.0",
+         sparse: "optimized",
+         app: false,
+         compile: false,
+         depth: 1},
+        {:daisyui,
+         github: "saadeghi/daisyui",
+         tag: "v5.5.20",
+         sparse: "packages/bundle",
+         app: false,
+         compile: false,
+         depth: 1},
+        {:telemetry_metrics, "~> 1.0"},
+        {:telemetry_poller, "~> 1.0"},
+        {:jason, "~> 1.2"},
+        {:dns_cluster, "~> 0.2.0"},
+        {:bandit, "~> 1.5"}
+      ]
+  end
+
+  # Public builds use committed Git revisions. Sibling paths are explicit development opt-in.
+  defp spectre_deps do
+    {pins, _} = Code.eval_file("spectre.lock.exs", __DIR__)
+
+    Enum.map(pins, fn {name, %{git: git, ref: ref}} ->
+      if System.get_env("SPECTRE_LOCAL_DEPS") == "1" do
+        {name, path: Path.expand("../#{name}", __DIR__), override: true}
+      else
+        unless Regex.match?(~r/\A[0-9a-f]{40}\z/, ref),
+          do: raise("Spectre dependencies require full commit SHAs")
+
+        {name, git: git, ref: ref, override: true}
+      end
+    end)
   end
 
   # Aliases are shortcuts or tasks specific to the current project.
@@ -96,7 +105,12 @@ defmodule DemoSpectre.MixProject do
         "esbuild demo_spectre --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "cmd elixir scripts/check_spectre_pins.exs",
+        "compile --warnings-as-errors",
+        "format",
+        "test"
+      ]
     ]
   end
 end

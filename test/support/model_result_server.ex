@@ -10,6 +10,11 @@ defmodule DemoSpectre.Test.ModelResultServer do
     ctx =
       ctx
       |> assign(:email, "hello@atelier.example")
+      |> assign(:contact, %{
+        email: "hello@atelier.example",
+        url: "http://127.0.0.1:4002/fixtures/studio",
+        observations: [%{kind: :mailto, href: "mailto:hello@atelier.example"}]
+      })
       |> assign(:url, "http://127.0.0.1:4002/fixtures/studio")
       |> assign(:job_active, true)
 

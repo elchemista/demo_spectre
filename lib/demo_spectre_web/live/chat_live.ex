@@ -35,6 +35,9 @@ defmodule DemoSpectreWeb.ChatLive do
         messages_count: 0,
         presentations: MapSet.new(),
         last_revision: nil,
+        gam_cursor: nil,
+        operational: %{},
+        refresh_scheduled: false,
         error: nil
       )
       |> stream(:messages, [])
@@ -50,7 +53,7 @@ defmodule DemoSpectreWeb.ChatLive do
           Process.monitor(session)
           info = Session.info(session)
           Phoenix.PubSub.subscribe(DemoSpectre.PubSub, Events.topic(info.id))
-          Process.send_after(self(), :refresh, 250)
+          send(self(), :diagnostics_changed)
 
           {:ok,
            socket
@@ -211,23 +214,50 @@ defmodule DemoSpectreWeb.ChatLive do
     {:noreply, socket}
   end
 
+  def handle_event("more_records", _, %{assigns: %{gam_cursor: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("more_records", _, socket) do
+    case Session.gam_page(socket.assigns.session, socket.assigns.gam_cursor) do
+      {:ok, page} ->
+        {:noreply,
+         socket
+         |> stream(:records, record_rows(page.records), limit: -200)
+         |> assign(:gam_cursor, page.next_cursor)}
+
+      {:error, :stale_cursor} ->
+        {:noreply, schedule_refresh(socket)}
+
+      {:error, _} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Registro non disponibile. Riprova dopo il prossimo aggiornamento."
+         )}
+    end
+  end
+
   def handle_event(_, _, socket),
     do:
       {:noreply,
        put_flash(socket, :error, "Richiesta non valida. La sessione resta disponibile.")}
 
   @impl true
+  def handle_info(:diagnostics_changed, socket), do: {:noreply, schedule_refresh(socket)}
+
   def handle_info(:refresh, %{assigns: %{session: nil}} = socket), do: {:noreply, socket}
 
   def handle_info(:refresh, socket) do
+    socket = assign(socket, :refresh_scheduled, false)
+
     case Session.snapshot(socket.assigns.session) do
       {:error, _} -> {:noreply, disconnected(socket)}
       snapshot -> {:noreply, refresh_snapshot(socket, snapshot)}
     end
   catch
     :exit, {:timeout, _} ->
-      Process.send_after(self(), :refresh, 1000)
-      {:noreply, socket}
+      {:noreply, schedule_refresh(assign(socket, :refresh_scheduled, false))}
 
     :exit, _ ->
       {:noreply, disconnected(socket)}
@@ -330,42 +360,42 @@ defmodule DemoSpectreWeb.ChatLive do
         skills: snapshot.skills,
         pending: pending,
         revision: gam.revision,
-        act_count: length(gam.acts),
-        outcome_count: length(gam.outcomes)
+        act_count: Map.get(gam.counts, :acts, 0),
+        outcome_count: Map.get(gam.counts, :outcomes, 0),
+        operational: snapshot.root
       )
 
     socket =
       if gam.revision != socket.assigns.last_revision do
-        records =
-          Enum.flat_map([:evidence, :decisions, :acts, :outcomes, :duties], fn kind ->
-            Enum.map(Map.get(gam, kind, []), fn record ->
-              %{
-                id: "gam-" <> record.ref,
-                kind: kind,
-                text: record_text(record)
-              }
-            end)
-          end)
-
-        socket |> stream(:records, records, reset: true) |> assign(:last_revision, gam.revision)
+        socket
+        |> stream(:records, record_rows(gam.records), reset: true)
+        |> assign(last_revision: gam.revision, gam_cursor: gam.next_cursor)
       else
         socket
       end
 
-    Process.send_after(self(), :refresh, 700)
     socket
   end
 
-  @spec record_text(struct()) :: String.t()
-  defp record_text(%{payload: %{event: event}} = record) do
-    # Show lifecycle facts before the bounded raw record: otherwise long identity
-    # bindings consume inspect's budget and hide why the intent actually closed.
-    inspect(event, pretty: true, limit: 60, printable_limit: 2000) <>
-      "\n\n" <>
-      inspect(record, pretty: true, limit: 30, printable_limit: 4000)
+  @spec schedule_refresh(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp schedule_refresh(%{assigns: %{session: nil}} = socket), do: socket
+  defp schedule_refresh(%{assigns: %{refresh_scheduled: true}} = socket), do: socket
+
+  defp schedule_refresh(socket) do
+    Process.send_after(self(), :refresh, 50)
+    assign(socket, :refresh_scheduled, true)
   end
 
-  defp record_text(record), do: inspect(record, pretty: true, limit: 30, printable_limit: 4000)
+  @spec record_rows([map()]) :: [map()]
+  defp record_rows(records) do
+    Enum.map(records, fn record ->
+      %{
+        id: "gam-" <> record.ref,
+        kind: record.kind,
+        text: inspect(record, pretty: true, limit: 30, printable_limit: 4000)
+      }
+    end)
+  end
 
   @spec submit(Phoenix.LiveView.Socket.t(), String.t(), String.t()) :: Phoenix.LiveView.Socket.t()
   defp submit(%{assigns: %{agent: nil}} = socket, _, _), do: socket

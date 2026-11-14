@@ -276,6 +276,18 @@
             {label(skill)} <code>{state[:pid]}</code>
           </p><.button id="native-message" class="text-button" phx-click="refresh_skill">Invia un messaggio OTP a Memoria</.button>
         </details>
+        <details id="operational-diagnostics" class="domain-detail">
+          <summary>Diagnostica operativa</summary>
+          <p>Metadati correnti da Spectre Lab. Non è una cronologia completa.</p>
+          <div class="operational-body">
+            <h3>Agente</h3>
+            <pre>{inspect(@operational, pretty: true, limit: 50, printable_limit: 4000)}</pre>
+            <div :for={{skill, state} <- @skills}>
+              <h3>{label(skill)}</h3>
+              <pre>{inspect(state[:diagnostics], pretty: true, limit: 50, printable_limit: 4000)}</pre>
+            </div>
+          </div>
+        </details>
         <div class="tools">
           <span class="eyebrow">STACK · 9 PACKAGE</span><div class="tool-grid">
             <span
@@ -343,6 +355,12 @@
             </summary><pre>{item.text}</pre>
           </details>
         </div>
+        <.button
+          :if={@tab == "gam" and @gam_cursor != nil}
+          id="more-gam-records"
+          class="text-button"
+          phx-click="more_records"
+        >Carica altri record</.button>
         <div
           id="mailbox"
           class={["inspector-content", @tab != "mailbox" && "hidden"]}

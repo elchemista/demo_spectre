@@ -12,9 +12,10 @@ defmodule DemoSpectre.Skills.OutreachServer do
   @impl true
   def handle_action(%{operation: {_, :kinetic, :send_email}, args: %{"to" => to}}, ctx) do
     # This is a business rule; Spectre supplies the Candidate and consent protocol.
-    if to == ctx.assigns[:email],
-      do: :confirm,
-      else: {:reject, :recipient_does_not_match_observed_contact}
+    case ctx.assigns[:contact] do
+      %{email: ^to} = contact -> {:confirm, %{bind: %{observed_contact: contact}}}
+      _ -> {:reject, :recipient_does_not_match_observed_contact}
+    end
   end
 
   def handle_action(action, ctx), do: super(action, ctx)
@@ -30,6 +31,8 @@ defmodule DemoSpectre.Skills.OutreachServer do
   def handle_flow({:outreach, :new_link}, input, ctx) do
     ctx
     |> assign(:job_active, true)
+    |> assign(:contact, nil)
+    |> assign(:email, nil)
     |> assign(:url, input.text)
     |> directive(
       {:new, %{mission: "Visit the page and prepare a contact email", reasoner: :model}},
@@ -113,12 +116,13 @@ defmodule DemoSpectre.Skills.OutreachServer do
   defp next(:closed, {:ok, _}, ctx) do
     ctx = assign(ctx, :tab, nil)
 
-    case Regex.run(~r/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, inspect(ctx.assigns.page)) do
-      [email] ->
+    case DemoSpectre.Contacts.select(ctx.assigns.page) do
+      {:ok, %{email: email} = contact} ->
         stream? =
           Application.get_env(:demo_spectre, :model_mode, :deterministic) == :deterministic
 
         ctx
+        |> assign(:contact, contact)
         |> assign(:email, email)
         |> generate(:contact,
           assigns: %{email: email, page: ctx.assigns.page, memories: ctx.assigns.memories},
@@ -128,10 +132,26 @@ defmodule DemoSpectre.Skills.OutreachServer do
           on_result: :model
         )
 
-      nil ->
+      {:error, :contact_missing} ->
         respond(
           assign(ctx, :job_active, false),
           "La pagina non contiene un indirizzo email. Nessuna azione proposta."
+        )
+
+      {:error, {:ambiguous_contacts, contacts}} ->
+        ctx
+        |> assign(:job_active, false)
+        |> assign(:contact, nil)
+        |> respond(
+          "La pagina contiene #{length(contacts)} contatti distinti. Non scelgo automaticamente il destinatario; nessuna email proposta."
+        )
+
+      {:error, :invalid_page} ->
+        ctx
+        |> assign(:job_active, false)
+        |> assign(:contact, nil)
+        |> respond(
+          "La pagina non contiene una fonte verificabile per il contatto. Nessuna email proposta."
         )
     end
   end

@@ -24,36 +24,51 @@ lifecycle changes in the shared Domain without erasing Duties. See the
 
 ## Run
 
-Use this directory layout with the current development checkouts:
+Clone this repository on its own. Core and all nine packages are fetched from
+**exact Git commits** in [spectre.lock.exs](spectre.lock.exs); [mix.lock](mix.lock)
+pins their transitive dependencies. No sibling checkout or API key is required.
 
-```text
-spectre/
-├── spectre/             feature/agent-server-gam (0.4.0)
-├── spectre_kinetic/     feature/stack-tools-0.4
-├── spectre_mnemonic/    feature/stack-tools-0.4
-├── spectre_lens/        feature/stack-tools-0.4
-├── spectre_prism/       feature/stack-tools-0.4
-├── spectre_beam/        feature/stack-tools-0.4
-├── spectre_directive/   feature/stack-tools-0.4
-├── spectre_pulse/       feature/stack-tools-0.4
-├── spectre_ledger/      feature/stack-tools-0.4
-├── spectre_lab/         feature/stack-tools-0.4
-└── demo_spectre/        this application
-```
-
-Elixir/OTP requirements are inherited from the local packages. Provision a
-supported Lightpanda binary before starting; Lens detects `lightpanda` on PATH
-or its configured installation location. This machine already has one. See the
-[Lens browser guide](../spectre_lens/docs/STANDALONE.md) for installation options.
+Use Elixir 1.19 or newer, OTP 28 or newer, Node 22, and a C build toolchain.
+Vettore uses its published native library; set `VETTORE_BUILD=1` and install Rust
+1.91 or newer to build it locally, as CI does. No database is needed.
 
 ```sh
+git clone https://github.com/elchemista/demo_spectre.git
+cd demo_spectre
+mix local.hex --force
+mix local.rebar --force
+elixir scripts/check_spectre_pins.exs
 mix setup
+# Linux x86_64: installs the checksum-pinned Lightpanda 1.0.4 artifact.
+bash scripts/install_browser.sh
 mix phx.server
 ```
 
-Open **http://localhost:4000**. Override the development port with `PORT` if
-needed; the generated fixture links follow it. Test uses its own port, 4002.
-No database creation or migration is needed.
+On another platform, install a supported Lightpanda using the
+[Lens browser guide](https://github.com/elchemista/spectre_lens/blob/feature/stack-tools-0.4/docs/STANDALONE.md)
+and set `LIGHTPANDA_PATH` to its executable. The pinned Linux installer and CI
+use the same browser release; an existing binary is not silently replaced.
+
+Open **http://localhost:4000**. `PORT` overrides the development port; generated
+fixture links follow it. Tests use their own port, 4002.
+
+For development across sibling repositories only, explicitly set
+`SPECTRE_LOCAL_DEPS=1` for Mix commands:
+
+```sh
+# demo_spectre sits beside spectre, spectre_kinetic, ..., spectre_lab.
+SPECTRE_LOCAL_DEPS=1 mix setup
+SPECTRE_LOCAL_DEPS=1 mix test
+SPECTRE_LOCAL_DEPS=1 mix phx.server
+```
+
+Local mode intentionally uses the working trees and is not the reproducible
+release build. Keep the committed pins and lockfile intact. Maintainers update
+pins **after committing all ten repositories** with
+`elixir scripts/update_spectre_pins.exs ../`, then publish those commits and run
+the [clean-clone CI workflow](.github/workflows/verify.yml). The check script
+validates pin consistency; fetching/building from a clean clone verifies that
+GitHub actually contains the commits and that the complete demo works.
 
 ## Try the showcase
 
@@ -139,7 +154,10 @@ written locally to disk. Spectre provides the Domain bootstrap, typed proposals,
 presentations, ingress and executor. There is **no application Host module**.
 `handle_action/2` in the Skill Server contains only business checks: the recipient
 must match the contact observed with Lens, and forgetting a record requires a
-result actually returned by search. Unchanged callbacks use the framework defaults.
+result actually returned by search. `Contacts` reads structured `mailto:` links
+and semantic page text, preserves source URL and observation provenance, and
+stops before generation if distinct contacts are ambiguous. A model cannot
+replace that observed recipient; GAM binds the provenance to the presentation. Unchanged callbacks use the framework defaults.
 
 The children receive the existing integration automatically, not fresh Domains
 or new grants. Their own checkpoint keys store local continuations; the GAM
@@ -164,6 +182,8 @@ Read declarations before implementations:
 | [skills/knowledge.ex](lib/demo_spectre/skills/knowledge.ex) | Memory, diagnostics and notification routes |
 | [skills/outreach_server.ex](lib/demo_spectre/skills/outreach_server.ex) | Lens → model → Kinetic → consent → local email → memory consent |
 | [skills/knowledge_server.ex](lib/demo_spectre/skills/knowledge_server.ex) | Independent callbacks using the same Stack helpers |
+| [contacts.ex](lib/demo_spectre/contacts.ex) | Structured observed contacts, provenance and explicit ambiguity |
+| [knowledge/](lib/demo_spectre/knowledge) | Plain memory formatting and diagnostic/notification presentation modules |
 | [pending.ex](lib/demo_spectre/pending.ex) | Ordinary Elixir policy: confirm/reject/suspend and audited timer |
 | [session.ex](lib/demo_spectre/session.ex) | Session lifecycle, child resources and event relay |
 | [chat_live.ex](lib/demo_spectre_web/live/chat_live.ex) | LiveView chat, consent correlation and read-only GAM projection |
@@ -194,9 +214,25 @@ still validates the bound consent Evidence. See the
 
 This demonstrates representative operations in all nine packages, not every
 capability or external provider. The activity panel is an application trace;
-**Registro GAM** comes from `Spectre.Server.gam_view/1` and is the authority
-projection; the UI never receives a Scope or submission credential.
+**Registro GAM** uses `Spectre.Server.gam_inspect/2`: a payload-free, paginated
+projection of recorded authority facts. `Spectre.Lab.inspect/3` supplies the
+**Diagnostica operativa** checkpoint metadata. Session subscribes to runtime and
+GAM changes; the LiveView coalesces notifications instead of polling the full
+ledger. **Carica altri record** advances a cursor pinned to the current revision;
+a changed revision restarts the page. The inspector keeps at most 200 displayed
+records. Counts refer to the entire projection, not only visible rows.
+Presentations still arrive separately for explicit consent; the diagnostic API
+does not expose their payloads, private assigns, prompts, or tool arguments.
+The UI never receives a Scope or submission credential.
+See the [updated inspector screenshot](docs/screenshots/desktop.png).
 No SMTP service is configured and no message leaves the local demo.
+
+Knowledge deliberately mounts memory, diagnostics and notifications together to
+show all nine tools in two actors. Its ordinary `Knowledge.Memory` and
+`Knowledge.Diagnostics` modules separate presentation responsibilities; tool
+orchestration stays in the Server and the same GAM loop. An application with
+independent authorization/lifecycle boundaries can mount separate Skills. An
+unknown successful continuation is reported as a diagnostic and never retried.
 
 ## Optional OpenRouter
 

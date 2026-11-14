@@ -156,7 +156,18 @@ defmodule DemoSpectre.CapabilitiesTest do
     {:ok, _} = Server.input(c.agent, "cerca Zafferano")
     assert_receive {:demo_event, %{kind: :memory_results, data: %{results: after_forget}}}, 5000
     refute Enum.any?(after_forget, &(&1.id == record.id))
-    assert Enum.any?(Session.snapshot(c.session).gam.acts, &(&1.class == "demo.forget"))
+
+    assert Enum.any?(
+             all_records(c.session, Session.snapshot(c.session).gam),
+             &(Map.get(&1, :class) == "demo.forget")
+           )
+  end
+
+  defp all_records(_session, %{next_cursor: nil, records: records}), do: records
+
+  defp all_records(session, page) do
+    assert {:ok, next} = Session.gam_page(session, page.next_cursor)
+    page.records ++ all_records(session, next)
   end
 
   defp shown_pending(c) do
