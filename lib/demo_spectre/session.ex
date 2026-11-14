@@ -85,7 +85,7 @@ defmodule DemoSpectre.Session do
         max_steps: 80
       )
 
-    :ok = Server.subscribe(agent)
+    subscribe_diagnostics(agent)
 
     {:ok,
      %{
@@ -104,40 +104,23 @@ defmodule DemoSpectre.Session do
     do: {:reply, Map.take(state, [:id, :agent, :domain]), state}
 
   def handle_call(:snapshot, {owner, _}, %{owner: owner} = state) do
-    skills =
-      Map.new([:outreach, :knowledge], fn skill ->
-        value =
-          case Server.skill_server(state.agent, skill) do
-            {:ok, pid} ->
-              diagnostics =
-                case Spectre.Lab.inspect(state.agent, :operational, skill: skill, limit: 25) do
-                  {:ok, projection} -> projection
-                  {:error, reason} -> %{error: reason}
-                end
-
-              pid
-              |> Server.status()
-              |> Map.take([:pending, :busy])
-              |> Map.merge(%{pid: inspect(pid), diagnostics: diagnostics})
-
-            {:error, reason} ->
-              %{pending: [], error: reason}
-          end
-
-        {skill, value}
-      end)
-
     result =
-      with {:ok, view} <- Server.gam_inspect(state.agent, limit: 50),
-           {:ok, operational} <- Spectre.Lab.inspect(state.agent, :operational, limit: 50) do
-        %{skills: skills, gam: view, root: operational}
-      end
+      diagnostic_read(fn ->
+        with {:ok, skills} <- skill_snapshots(state.agent),
+             {:ok, view} <- Server.gam_inspect(state.agent, limit: 50),
+             {:ok, operational} <- Spectre.Lab.inspect(state.agent, :operational, limit: 50) do
+          %{skills: skills, gam: view, root: operational}
+        end
+      end)
 
     {:reply, result, state}
   end
 
   def handle_call({:gam_page, cursor}, {owner, _}, %{owner: owner} = state),
-    do: {:reply, Server.gam_inspect(state.agent, limit: 50, cursor: cursor), state}
+    do:
+      {:reply,
+       diagnostic_read(fn -> Server.gam_inspect(state.agent, limit: 50, cursor: cursor) end),
+       state}
 
   def handle_call({:presented, ref}, {owner, _}, %{owner: owner} = state),
     do: {:reply, Server.presented(state.agent, ref), state}
@@ -151,6 +134,11 @@ defmodule DemoSpectre.Session do
   def handle_call(_, _, state), do: {:reply, {:error, :unauthorized_transport}, state}
 
   @impl true
+  def handle_info(:subscribe_diagnostics, state) do
+    subscribe_diagnostics(state.agent)
+    {:noreply, state}
+  end
+
   def handle_info({Spectre.Server.GAM.Managed, _, {:presentation, show}}, state) do
     send(state.owner, {:presentation, show})
     {:noreply, state}
@@ -188,6 +176,52 @@ defmodule DemoSpectre.Session do
     Enum.each([state.agent, state.store, state.stack], &stop/1)
     DemoSpectre.Events.forget(state.id)
     :ok
+  end
+
+  @spec skill_snapshots(pid()) :: {:ok, map()} | {:error, term()}
+  defp skill_snapshots(agent) do
+    Enum.reduce_while([:outreach, :knowledge], {:ok, %{}}, fn skill, {:ok, skills} ->
+      case skill_snapshot(agent, skill) do
+        {:ok, value} -> {:cont, {:ok, Map.put(skills, skill, value)}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  @spec skill_snapshot(pid(), atom()) :: {:ok, map()} | {:error, term()}
+  defp skill_snapshot(agent, skill) do
+    diagnostic_read(fn ->
+      with {:ok, pid} <- Server.skill_server(agent, skill),
+           {:ok, diagnostics} <- Spectre.Lab.inspect(agent, :operational, skill: skill, limit: 25),
+           %{pending: _} = status <- Server.status(pid) do
+        {:ok,
+         status
+         |> Map.take([:pending, :busy])
+         |> Map.merge(%{pid: inspect(pid), diagnostics: diagnostics})}
+      else
+        {:error, _} = error -> error
+        _ -> {:error, :diagnostic_source_unavailable}
+      end
+    end)
+  end
+
+  @spec diagnostic_read((-> term())) :: term()
+  defp diagnostic_read(fun) do
+    fun.()
+  catch
+    :exit, _ -> {:error, :diagnostic_source_unavailable}
+  end
+
+  @spec subscribe_diagnostics(pid()) :: :ok
+  defp subscribe_diagnostics(agent) do
+    case diagnostic_read(fn -> Server.subscribe(agent) end) do
+      :ok ->
+        :ok
+
+      {:error, _} ->
+        Process.send_after(self(), :subscribe_diagnostics, 1_000)
+        :ok
+    end
   end
 
   @spec operations() :: map()

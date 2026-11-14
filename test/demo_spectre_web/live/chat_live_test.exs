@@ -106,6 +106,31 @@ defmodule DemoSpectreWeb.ChatLiveTest do
     assert has_element?(view, "#session-error")
   end
 
+  test "a diagnostic timeout preserves the live chat and last snapshot until retry", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/")
+    await(fn -> :sys.get_state(view.pid).socket.assigns.operational != %{} end)
+    before = :sys.get_state(view.pid).socket.assigns
+    :ok = :sys.suspend(before.agent)
+
+    try do
+      send(view.pid, :refresh)
+      await(fn -> has_element?(view, "#diagnostic-warning") end, 250)
+      current = :sys.get_state(view.pid).socket.assigns
+      assert current.session == before.session
+      assert current.agent == before.agent
+      assert current.operational == before.operational
+      refute has_element?(view, "#session-error")
+      refute has_element?(view, "#send-message[disabled]")
+    after
+      :sys.resume(before.agent)
+    end
+
+    view |> element("#retry-diagnostics") |> render_click()
+    await(fn -> not has_element?(view, "#diagnostic-warning") end)
+    view |> element("#agent-status") |> render_click()
+    await(fn -> has_element?(view, "#messages .from-agent", "Agente disponibile") end)
+  end
+
   test "terminal preview events finalize only their own stream", %{conn: conn} do
     {:ok, view, _} = live(conn, "/")
     send(view.pid, {:agent_event, {:skill, :outreach, {:preview, "one", "g1", "Prima"}}})

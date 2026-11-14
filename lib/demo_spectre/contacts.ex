@@ -56,14 +56,20 @@ defmodule DemoSpectre.Contacts do
   defp mailto_observations(href) do
     case URI.parse(href) do
       %URI{scheme: scheme, path: path} when scheme in ["mailto", "MAILTO"] and is_binary(path) ->
-        path
-        |> URI.decode()
-        |> String.split(",", trim: true)
-        |> Enum.flat_map(&observation(&1, %{kind: :mailto, href: "mailto:" <> path}))
+        if Regex.match?(~r/%(?![0-9A-Fa-f]{2})/, path) do
+          []
+        else
+          path
+          |> URI.decode()
+          |> String.split(",", trim: true)
+          |> Enum.flat_map(&observation(&1, %{kind: :mailto, href: "mailto:" <> path}))
+        end
 
       _ ->
         []
     end
+  rescue
+    ArgumentError -> []
   end
 
   @spec text_observations(term()) :: [map()]

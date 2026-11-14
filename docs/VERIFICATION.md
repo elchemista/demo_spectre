@@ -1,5 +1,35 @@
 # Verification and adversarial checks — 2026-11-14
 
+## Opus review follow-up
+
+After the review fixes, the final demo passed **41/41** `mix precommit` tests
+(44.6 seconds), including the Git-pin consistency check. The four relevant
+Chromium scenarios passed again (**4/4**, 23.3 seconds): all nine packages,
+eight concurrent status requests with Beam/Outreach, mobile layout, and reconnect
+with stale consent rejection. Both runs used Lightpanda 1.0.4. The earlier full
+20-scenario run remains recorded below. The endpoint was stopped and port 4000
+verified closed after the browser run.
+
+The added regressions verify malformed percent-encoding in mailto links is
+ignored and Outreach accepts the next request; a Skill disappearing between
+lookup and status cannot terminate Session; root diagnostic read exits become
+errors; and a real Agent read timeout preserves the LiveView's session and last
+snapshot, shows a retry control, and recovers to a working chat. Actual monitored
+Session death still disconnects the page. Duplicate redacted records with no
+reference retain distinct display IDs across pages using an ordinal plus digest.
+
+On the tested Elixir version, malformed `%zz` was preserved by `URI.decode/1`
+rather than raising. The parser therefore rejects malformed percent escapes
+explicitly and also catches `ArgumentError` from decoding. A failed diagnostic
+subscription retries; transient inspection errors never act as session shutdown.
+
+Logs: `/tmp/demo-opus-final-precommit.log`, `/tmp/demo-opus-fixes-browser.log`,
+`/tmp/demo-opus-fixes-server.log`. The synthetic ID regression also passed in
+`/tmp/demo-opus-record-ids-final.log`. The final server log has no application
+warnings or errors. The nil-reference display adjustment followed the browser
+run and is covered by the final full ExUnit run.
+
+
 ## 0.4 release preparation: diagnostics and demo hardening
 
 The final source passed **36/36** `mix precommit` checks (37.7 seconds) and

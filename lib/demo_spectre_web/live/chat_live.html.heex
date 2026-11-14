@@ -288,6 +288,10 @@
             </div>
           </div>
         </details>
+        <div :if={@diagnostics_error} id="diagnostic-warning" role="status" class="domain-detail">
+          <p>{@diagnostics_error}</p>
+          <.button id="retry-diagnostics" class="text-button" phx-click="refresh_diagnostics">Riprova</.button>
+        </div>
         <div class="tools">
           <span class="eyebrow">STACK · 9 PACKAGE</span><div class="tool-grid">
             <span

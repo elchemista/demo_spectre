@@ -113,6 +113,10 @@ part of this showcase.
 The authenticated Session consumer subscribes with `Spectre.Server.subscribe/1`.
 Checkpoint and shared GAM changes trigger notifications, coalesced by LiveView
 before reading a fresh projection. There is no recurring full-ledger poll.
+Transient read errors and disappearing Skill processes return diagnostic errors
+instead of terminating Session. The UI retains its last snapshot with a retry
+control; only the actual monitored Session shutdown disconnects the chat.
+A failed notification subscription retries independently of snapshot reads.
 
 `Spectre.Lab.inspect(agent, :operational, limit: 50)` reads bounded checkpoint
 metadata for the developer panel. `Spectre.Server.gam_inspect/2` supplies safe

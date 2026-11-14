@@ -1,7 +1,7 @@
 # Exact source revisions. Update: elixir scripts/update_spectre_pins.exs ../
 [
   spectre: %{
-    ref: "fd361b1be3e706c8d84f8b0b6169f2eb7107b338",
+    ref: "50e7c06a8250a9003e7f8562e98e14bd89fec48a",
     git: "https://github.com/elchemista/spectre.git"
   },
   spectre_kinetic: %{

@@ -227,6 +227,9 @@ Presentations still arrive separately for explicit consent; the diagnostic API
 does not expose their payloads, private assigns, prompts, or tool arguments.
 The UI never receives a Scope or submission credential.
 See the [updated inspector screenshot](docs/screenshots/desktop.png).
+A temporary diagnostic outage keeps the last view and offers **Riprova**; it does
+not disconnect the chat or stop its Agent. Actual Session termination is detected
+separately through the process monitor.
 No SMTP service is configured and no message leaves the local demo.
 
 Knowledge deliberately mounts memory, diagnostics and notifications together to

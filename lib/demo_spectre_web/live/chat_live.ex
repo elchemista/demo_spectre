@@ -36,7 +36,9 @@ defmodule DemoSpectreWeb.ChatLive do
         presentations: MapSet.new(),
         last_revision: nil,
         gam_cursor: nil,
+        gam_loaded: 0,
         operational: %{},
+        diagnostics_error: nil,
         refresh_scheduled: false,
         error: nil
       )
@@ -214,6 +216,8 @@ defmodule DemoSpectreWeb.ChatLive do
     {:noreply, socket}
   end
 
+  def handle_event("refresh_diagnostics", _, socket), do: {:noreply, schedule_refresh(socket)}
+
   def handle_event("more_records", _, %{assigns: %{gam_cursor: nil}} = socket),
     do: {:noreply, socket}
 
@@ -222,20 +226,20 @@ defmodule DemoSpectreWeb.ChatLive do
       {:ok, page} ->
         {:noreply,
          socket
-         |> stream(:records, record_rows(page.records), limit: -200)
-         |> assign(:gam_cursor, page.next_cursor)}
+         |> stream(:records, record_rows(page.records, socket.assigns.gam_loaded), limit: -200)
+         |> assign(
+           gam_cursor: page.next_cursor,
+           gam_loaded: socket.assigns.gam_loaded + length(page.records)
+         )}
 
       {:error, :stale_cursor} ->
         {:noreply, schedule_refresh(socket)}
 
       {:error, _} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "Registro non disponibile. Riprova dopo il prossimo aggiornamento."
-         )}
+        {:noreply, diagnostics_unavailable(socket)}
     end
+  catch
+    :exit, _ -> {:noreply, diagnostics_unavailable(socket)}
   end
 
   def handle_event(_, _, socket),
@@ -252,15 +256,11 @@ defmodule DemoSpectreWeb.ChatLive do
     socket = assign(socket, :refresh_scheduled, false)
 
     case Session.snapshot(socket.assigns.session) do
-      {:error, _} -> {:noreply, disconnected(socket)}
+      {:error, _} -> {:noreply, diagnostics_unavailable(socket)}
       snapshot -> {:noreply, refresh_snapshot(socket, snapshot)}
     end
   catch
-    :exit, {:timeout, _} ->
-      {:noreply, schedule_refresh(assign(socket, :refresh_scheduled, false))}
-
-    :exit, _ ->
-      {:noreply, disconnected(socket)}
+    :exit, _ -> {:noreply, diagnostics_unavailable(assign(socket, :refresh_scheduled, false))}
   end
 
   def handle_info({:presentation, show}, socket) do
@@ -362,19 +362,33 @@ defmodule DemoSpectreWeb.ChatLive do
         revision: gam.revision,
         act_count: Map.get(gam.counts, :acts, 0),
         outcome_count: Map.get(gam.counts, :outcomes, 0),
-        operational: snapshot.root
+        operational: snapshot.root,
+        diagnostics_error: nil
       )
 
     socket =
       if gam.revision != socket.assigns.last_revision do
         socket
         |> stream(:records, record_rows(gam.records), reset: true)
-        |> assign(last_revision: gam.revision, gam_cursor: gam.next_cursor)
+        |> assign(
+          last_revision: gam.revision,
+          gam_cursor: gam.next_cursor,
+          gam_loaded: length(gam.records)
+        )
       else
         socket
       end
 
     socket
+  end
+
+  @spec diagnostics_unavailable(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp diagnostics_unavailable(socket) do
+    assign(
+      socket,
+      :diagnostics_error,
+      "Diagnostica temporaneamente non disponibile. Gli ultimi dati restano visibili; la chat è attiva."
+    )
   end
 
   @spec schedule_refresh(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
@@ -386,15 +400,25 @@ defmodule DemoSpectreWeb.ChatLive do
     assign(socket, :refresh_scheduled, true)
   end
 
-  @spec record_rows([map()]) :: [map()]
-  defp record_rows(records) do
-    Enum.map(records, fn record ->
+  @spec record_rows([map()], non_neg_integer()) :: [map()]
+  defp record_rows(records, offset \\ 0) do
+    records
+    |> Enum.with_index(offset)
+    |> Enum.map(fn {record, ordinal} ->
       %{
-        id: "gam-" <> record.ref,
+        id: "gam-#{record.kind}-" <> record_ref(record, ordinal),
         kind: record.kind,
         text: inspect(record, pretty: true, limit: 30, printable_limit: 4000)
       }
     end)
+  end
+
+  @spec record_ref(map(), non_neg_integer()) :: String.t()
+  defp record_ref(%{ref: ref}, _ordinal) when is_binary(ref) and byte_size(ref) > 0, do: ref
+
+  defp record_ref(record, ordinal) do
+    digest = :crypto.hash(:sha256, :erlang.term_to_binary(record)) |> Base.encode16(case: :lower)
+    "#{ordinal}-#{digest}"
   end
 
   @spec submit(Phoenix.LiveView.Socket.t(), String.t(), String.t()) :: Phoenix.LiveView.Socket.t()

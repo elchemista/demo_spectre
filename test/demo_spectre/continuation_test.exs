@@ -38,6 +38,28 @@ defmodule DemoSpectre.ContinuationTest do
     refute updated.assigns.job_active
   end
 
+  test "a malformed mailto does not leave Outreach permanently active", %{ctx: ctx} do
+    page = %{url: "https://studio.example", links: [%{href: "mailto:a%zz@b.com"}]}
+
+    updated =
+      OutreachServer.handle_result(:closed, {:ok, %{}}, %{
+        ctx
+        | assigns: Map.put(ctx.assigns, :page, page)
+      })
+
+    assert [%Command{kind: :respond, args: [text]}] = updated.commands
+    assert text =~ "non contiene un indirizzo email"
+    refute updated.assigns.job_active
+
+    next =
+      OutreachServer.handle_flow({:outreach, :new_link}, %{text: page.url}, %{
+        updated
+        | commands: []
+      })
+
+    assert [%Command{kind: :tool}] = next.commands
+  end
+
   test "recipient policy binds observed provenance and rejects model replacement", %{ctx: ctx} do
     contact = %{
       email: "hello@example.com",

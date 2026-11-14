@@ -58,6 +58,9 @@ defmodule DemoSpectre.ContactsTest do
           "bad..local@example.com",
           "user@-example.com",
           "user@example..com",
+          "a%zz@b.com",
+          "a%@b.com",
+          "a%0@b.com",
           "user@example.com%0Aother"
         ] do
       assert {:error, :contact_missing} =
